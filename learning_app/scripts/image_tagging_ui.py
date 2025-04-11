@@ -599,34 +599,3 @@ def flag_image(image_item, user_email, flag_type="flagged"):
         print(f"Error flagging image: {str(e)}")
         return False
 
-def render_tagging_ui(data_entry):
-    image_id = data_entry.get("image", "").split("/")[-1]  # Extract filename from path if needed
-    if not image_id:
-        image_id = data_entry.get("image_filename", f"image_{time.time()}")
-        
-    st.header("🎨 Image Analysis")
-    
-    # Get image URL - handle both direct URLs and local file paths
-    image_url = data_entry.get("image_url", data_entry.get("image", ""))
-    image_caption = data_entry.get("text", data_entry.get("caption", ""))
-    
-    # Display the filename above the image
-    image_filename = data_entry.get("image_filename", image_id)
-    st.markdown(f"**Filename:** `{image_filename}`")
-    
-    # Visual indicator for flagged/rejected - check both session state and current item
-    is_flagged = data_entry.get("flagged", False) or st.session_state.get("current_image_data", {}).get("flagged", False)
-    is_rejected = data_entry.get("rejected", False) or st.session_state.get("current_image_data", {}).get("rejected", False)
-    
-    if is_flagged:
-        st.warning("⚠️ **This image is flagged for review.**")
-
-    if is_rejected:
-        st.error("❌ **This image is marked as rejected.**")
-    
-    # Display image with warning for missing URLs
-    if image_url:
-        st.image(image_url, caption=image_caption, use_container_width=True)
-    else:
-        st.warning("⚠️ No image URL found in this entry")
-        st.markdown(f"**Missing URL for file:** `{image_filename}`")

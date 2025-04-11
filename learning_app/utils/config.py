@@ -1,9 +1,6 @@
 import os
 import toml
 
-# Define the path to the secrets file
-SECRETS_PATH = "/Users/bmcmanus/Documents/my_docs/portfolio/secrets/secrets.toml"
-
 # Define development mode flag
 IS_DEV = os.getenv('DEVELOPMENT_MODE', 'False').lower() in ('true', '1', 't')
 
@@ -66,15 +63,6 @@ def load_environment():
                 
                 return True
         
-        # If all else fails, provide fallbacks for development
-        if IS_DEV:
-            print("⚠️ Using development mode fallbacks for missing credentials")
-            # Set up minimal environment for dev mode (empty Firebase, placeholder OpenAI)
-            os.environ['FIREBASE_DATABASE_URL'] = ''
-            os.environ['FIREBASE_ADMIN_CREDENTIAL_PATH'] = ''
-            os.environ['OPENAI_API_KEY'] = 'sk-placeholder-for-dev-mode'
-            return True
-        
         # If not in dev mode and no credentials found, log an error
         print("❌ Could not find secrets.toml in any expected location")
         return False
@@ -87,10 +75,31 @@ def load_environment():
 environment_loaded = load_environment()
 
 def get_firebase_credentials():
-    """Get the Firebase credentials dictionary from the TOML file"""
+    """Get the Firebase credentials dictionary from Streamlit secrets or local file"""
     try:
-        secrets = toml.load(SECRETS_PATH)
-        return secrets["FIREBASE"]
+        # First try Streamlit secrets
+        import streamlit as st
+        if hasattr(st, 'secrets') and 'FIREBASE' in st.secrets:
+            print("✅ Using Firebase credentials from Streamlit secrets")
+            return st.secrets['FIREBASE']
+        
+        # Fall back to local file if needed
+        print("⚠️ Streamlit secrets not found, trying local files")
+        # Try multiple possible locations for the secrets.toml file
+        possible_paths = [
+            os.path.join(os.path.dirname(__file__), '..', '..', '..', 'secrets', 'secrets.toml'),
+            os.path.join(os.path.dirname(__file__), '..', '..', 'secrets.toml'),
+            '.streamlit/secrets.toml'
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                print(f"✅ Found secrets.toml at {path}")
+                secrets = toml.load(path)
+                return secrets["FIREBASE"]
+                
+        print("⚠️ No Firebase credentials found")
+        return {}
     except Exception as e:
         print(f"⚠️ Error loading Firebase credentials: {e}")
         return {}

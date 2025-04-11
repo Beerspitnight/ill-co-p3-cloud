@@ -17,7 +17,7 @@ except ImportError:
         "Rhythm", "Proportion", "Variety", "Unity"
     ]
 # Toggle to show extra dev info or test buttons
-IS_DEV = True
+IS_DEV = False
 
 # --- Step 1: Load Export Data (CSV + JSON)
 def load_export_data():
@@ -167,7 +167,7 @@ def render_tagging_ui(image_data, user_info, current_index=0):
         align-items: center;
         padding: 20px;
     ">
-        <img src="assets/logo.png" width="150" onerror="this.onerror=null; this.src='https://placehold.co/150x150/111/teal?text=Logo'; this.style.padding='10px';" style="
+        <img src="logo.png" width="150" onerror="this.onerror=null; this.src='https://placehold.co/150x150/111/teal?text=Logo'; this.style.padding='10px';" style="
             border-radius: 12px;
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
             background-color: #111;

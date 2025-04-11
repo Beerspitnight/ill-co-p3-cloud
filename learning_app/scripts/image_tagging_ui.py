@@ -6,6 +6,10 @@ import pandas as pd
 import csv
 import traceback
 import logging
+import sys
+
+# Add the parent directory to path to ensure imports work regardless of how script is run
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import constants from the constants file instead of dataset_interface2
 try:
@@ -15,15 +19,31 @@ except ImportError:
     try:
         from .constants import ELEMENT_OPTIONS, PRINCIPLE_OPTIONS
     except ImportError:
-        # Fallback if import fails
-        logging.warning("Failed to import ELEMENT_OPTIONS and PRINCIPLE_OPTIONS from constants. Using fallback values.")
-        ELEMENT_OPTIONS = [
-            "Line", "Shape", "Form", "Color", "Value", "Space", "Texture"
-        ]
-        PRINCIPLE_OPTIONS = [
-            "Balance", "Emphasis", "Movement", "Pattern & Repetition", 
-            "Rhythm", "Proportion", "Variety", "Unity"
-        ]
+        # Try direct import as last resort
+        try:
+            import constants
+            ELEMENT_OPTIONS = constants.ELEMENT_OPTIONS
+            PRINCIPLE_OPTIONS = constants.PRINCIPLE_OPTIONS
+        except ImportError:
+            # Fallback if all imports fail
+            logging.warning("Failed to import ELEMENT_OPTIONS and PRINCIPLE_OPTIONS from constants. Using fallback values.")
+            ELEMENT_OPTIONS = [
+                "Line", "Shape", "Form", "Color", "Value", "Space", "Texture"
+            ]
+            PRINCIPLE_OPTIONS = [
+                "Balance", "Emphasis", "Movement", "Pattern & Repetition", 
+                "Rhythm", "Proportion", "Variety", "Unity"
+            ]
+
+# Try to import Firebase service early so we can handle failures gracefully
+try:
+    from learning_app.utils.firebase_service import save_tag_to_firebase
+    FIREBASE_AVAILABLE = True
+except ImportError:
+    FIREBASE_AVAILABLE = False
+    def save_tag_to_firebase(image_id, data):
+        logging.warning(f"Firebase service not available, data for image {image_id} saved locally only")
+        return False
 
 # Toggle to show extra dev info or test buttons
 IS_DEV = False
@@ -474,32 +494,33 @@ def render_tagging_ui(image_data, user_info, current_index=0):
         
         # Save to Firebase
         try:
-            from learning_app.utils.firebase_service import save_tag_to_firebase
-            
-            # Generate image ID
-            if "image_filename" in current_item:
-                image_id = current_item["image_filename"]
-            elif "image" in current_item and current_item["image"]:
-                url_parts = current_item["image"].split("/")
-                image_id = url_parts[-1].replace(".", "_")
+            if FIREBASE_AVAILABLE:
+                # Generate image ID
+                if "image_filename" in current_item:
+                    image_id = current_item["image_filename"]
+                elif "image" in current_item and current_item["image"]:
+                    url_parts = current_item["image"].split("/")
+                    image_id = url_parts[-1].replace(".", "_")
+                else:
+                    image_id = str(hash(current_item.get("text", "") + str(current_index)))
+                
+                # Ensure user_info contains an email key
+                user_email = user_info.get("email", "unknown_user@example.com")
+                
+                # Prepare data for Firebase
+                firebase_data = {
+                    "text": current_item.get("text", ""),
+                    "image_url": current_item.get("image", ""),
+                    "tags": save_tags,
+                    "tagger": user_email,
+                    "timestamp": pd.Timestamp.now().isoformat()
+                }
+                
+                # Save to Firebase
+                save_tag_to_firebase(image_id, firebase_data)
+                st.toast("Tags saved", icon="✅")
             else:
-                image_id = str(hash(current_item.get("text", "") + str(current_index)))
-            
-            # Ensure user_info contains an email key
-            user_email = user_info.get("email", "unknown_user@example.com")
-            
-            # Prepare data for Firebase
-            firebase_data = {
-                "text": current_item.get("text", ""),
-                "image_url": current_item.get("image", ""),
-                "tags": save_tags,
-                "tagger": user_email,
-                "timestamp": pd.Timestamp.now().isoformat()
-            }
-            
-            # Save to Firebase
-            save_tag_to_firebase(image_id, firebase_data)
-            st.toast("Tags saved", icon="✅")
+                logging.warning("Firebase not available for saving - using local storage only")
         except Exception as e:
             logging.error(f"Firebase save failed: {e}")
             st.error("Failed to save tags to Firebase. Please try again later or contact support.")

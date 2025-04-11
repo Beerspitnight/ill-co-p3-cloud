@@ -350,7 +350,30 @@ if st.session_state.page == "login":
             with col_a:
                 if st.button("Login", use_container_width=True):
                     user = login_user(email, password)
-                    # Process login result here
+                    if user:
+                        st.session_state.user = user
+                        st.session_state.page = "tagging"
+                        # Initialize image index in session state
+                        if "image_index" not in st.session_state:
+                            st.session_state.image_index = 0
+                        st.rerun()
+                    else:
+                        st.error("Login failed. Please check your email and password.")
+            
+            with col_b:
+                if st.button("🧪 🌲", use_container_width=True):
+                    # Create a development user with minimal permissions
+                    dev_user = {
+                        "uid": "dev-user-1234",
+                        "email": "dev@example.com",
+                        "display_name": "Developer"
+                    }
+                    st.session_state.user = dev_user
+                    st.session_state.page = "tagging"
+                    # Initialize image index in session state
+                    if "image_index" not in st.session_state:
+                        st.session_state.image_index = 0
+                    st.rerun()
                     
             st.markdown('</div>', unsafe_allow_html=True)
     

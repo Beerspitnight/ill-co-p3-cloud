@@ -1,9 +1,10 @@
-# dataset_interface.py 
-# IMPORTANT: set_page_config must be the FIRST Streamlit command
 import streamlit as st
 
 # Configure the page first, before any other Streamlit commands
 st.set_page_config(page_title="Ill-Co Tagging", layout="wide", initial_sidebar_state="expanded")
+
+# dataset_interface.py 
+# IMPORTANT: set_page_config must be the FIRST Streamlit command
 
 # Now proceed with other imports
 from datetime import datetime
@@ -18,10 +19,10 @@ from learning_app.utils.config import load_environment, get_openai_api_key
 
 # Import constants from the constants file
 try:
-    from learning_app.scripts.constants import ELEMENT_OPTIONS, PRINCIPLE_OPTIONS
-except ModuleNotFoundError:
+    from learning_app.utils.constants import ELEMENT_OPTIONS, PRINCIPLE_OPTIONS
+except (ModuleNotFoundError, ImportError, SyntaxError) as e:
     # If that fails, try to define constants directly
-    print("⚠️ Could not import constants module, using local definitions")
+    print(f"⚠️ Could not import constants module due to: {e}. Using local definitions instead.")
     # Define the constants directly in this file
     ELEMENT_OPTIONS = [
         "Line", "Shape", "Form", "Color", "Value", "Space", "Texture"
@@ -30,6 +31,9 @@ except ModuleNotFoundError:
         "Balance", "Emphasis", "Movement", "Pattern & Repetition", 
         "Rhythm", "Proportion", "Variety", "Unity"
     ]
+
+# Define a constant at the top of your file
+IS_DEV = True  # Set to False for production
 
 # Load .env from absolute path FIRST - before any firebase imports
 # Ensure environment is loaded
@@ -57,11 +61,6 @@ def load_image_pairs():
         with open(file_path, "r") as f:
             data = json.load(f)
         print(f"✅ Successfully loaded {len(data)} image pairs from {file_path}")
-        
-        # Set a random seed based on the current time
-        # This ensures different ordering each time the app runs
-        random.seed(int(time.time()))
-        random.shuffle(data)
         
         return data
     except FileNotFoundError:
@@ -106,10 +105,11 @@ def load_image_pairs():
 
 def validate_image_data(data_list):
     """Clean and validate image data before using it"""
+    print("⚠️ Using sample data - combined_pairs.json not found")
     valid_data = []
     for item in data_list:
         # Ensure required fields exist
-        if not item.get("image") and not item.get("image_url"):
+        if not item.get("image"):
             # Add a placeholder image URL if missing
             item["image"] = "https://placehold.co/600x400/gray/white?text=No+Image"
         
@@ -164,7 +164,10 @@ try:
     api_key = get_openai_api_key()
     if api_key:
         client = openai.OpenAI(api_key=api_key)
-        print("✅ Using environment variable for OpenAI API key")
+        if api_key:
+            print("✅ Using environment variable for OpenAI API key")
+        else:
+            raise ValueError("❌ OpenAI API key is missing or invalid. Please check your environment configuration.")
     else:
         # Fall back to Streamlit secrets if needed
         client = openai.OpenAI(api_key=st.secrets["OPENAI"]["OPENAI_API_KEY"])
@@ -190,27 +193,75 @@ with st.sidebar:
         st.title("✨ Create New Account")
         st.markdown("New to the platform? Create your account here to get started.")
         
-        new_email = st.text_input("Email address", key="sidebar_email")
-        new_password = st.text_input("Password (min 6 chars)", type="password", key="sidebar_password")
+        st.markdown("## ✨ Create New Account")
+        st.markdown("""
+        > 🧠 **Why Tag?**  
+        > Help us train a visual design model by labeling images with the elements and principles of design.  
+        > Go head-to-head with the algorithm — can your human intuition out-tag machine logic?  
+        >This is a pet project, and my real go at programing anything.  
+        >   Let's see what we can make of these elctrons! 🔮            
+        >   I appreciate your 🐓ing.
+                    -🍺SpitNight
+        """)
+
+        # Email / password / display name fields
+        email = st.text_input("Email address", key="sidebar_email")
+        password = st.text_input("Password (min 6 chars)", type="password", key="sidebar_password")
         display_name = st.text_input("Your name", key="sidebar_name")
-        
+
         if st.button("Create Account", use_container_width=True):
-            # Call the create_user function from auth.py
-            user_info = create_user(new_email, new_password, display_name)
-            if user_info:
-                # Show success message with instructions
-                st.success("✅ Account created successfully!")
-                
-                if user_info.get("email_sent", False):
-                    st.info("📩 A verification email has been sent to your email address. Please check your inbox (including spam folder) and click the verification link.")
-                else:
-                    st.warning("⚠️ We couldn't send a verification email automatically. Please contact support.")
+            try:
+                # Show a status message
+                with st.spinner("Creating account..."):
+                    st.info(f"Attempting to create account for: {email}")
                     
-                    # Show the manual verification link as a fallback
-                    with st.expander("Need the verification link?"):
-                        st.info("If you didn't receive the email, ask an administrator to check the application logs.")
-            else:
-                st.error("Could not create account. Password must be at least 6 characters or try a different email.")
+                    # Add debugging to see what's happening
+                    user_info = create_user(email, password, display_name)
+                    
+                    if user_info:
+                        st.success("✅ Account created successfully!")
+                        
+                        if user_info.get("email_sent", False):
+                            st.info("📩 A verification email has been sent to your email address.")
+                        else:
+                            st.warning("⚠️ We couldn't send a verification email automatically.")
+                            
+                    else:
+                        st.error("Could not create account. Check your password (min 6 characters) or try a different email.")
+                        
+                        # Add fallback option when Firebase is unavailable
+                        st.info("Since Firebase is unavailable, would you like to use dev mode instead?")
+                        if st.button("Use Dev Mode"):
+                            # Create a development user with minimal permissions
+                            dev_user = {
+                                "uid": f"dev-{hash(email)}",
+                                "email": email,
+                                "display_name": display_name or email.split('@')[0]
+                            }
+                            st.session_state.user = dev_user
+                            st.session_state.page = "tagging"
+                            # Initialize image index in session state
+                            if "image_index" not in st.session_state:
+                                st.session_state.image_index = 0
+                            st.rerun()
+            except Exception as e:
+                # Catch any uncaught errors
+                st.error(f"Error during account creation: {str(e)}")
+                
+                # Provide fallback option
+                st.info("Would you like to use dev mode instead?")
+                if st.button("Use Dev Mode"):
+                    # Create a development user
+                    dev_user = {
+                        "uid": f"dev-{hash(email)}",
+                        "email": email,
+                        "display_name": display_name or email.split('@')[0]
+                    }
+                    st.session_state.user = dev_user
+                    st.session_state.page = "tagging"
+                    if "image_index" not in st.session_state:
+                        st.session_state.image_index = 0
+                    st.rerun()
     else:
         # For logged-in users, show user info and logout option
         st.title(f"👋 Welcome, {st.session_state.user.get('display_name', 'User')}")
@@ -231,7 +282,7 @@ def render_art_elements_sidebar():
     """Render the art elements and principles sidebar content with hover functionality"""
     
     st.sidebar.title("📚 Elements & Principles: Quick Reference")
-    
+    qr_urls_path = os.getenv("QR_URLS_PATH", "learning_app/output/reference_qr_image_urls.json")
     try:
         # === Load image URL map ===
         qr_urls_path = "learning_app/output/reference_qr_image_urls.json"
@@ -341,15 +392,17 @@ if st.session_state.page == "login":
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.markdown('<div class="login-container">', unsafe_allow_html=True)
-            st.title("Login")
+            st.markdown("## 🔐 Login")
             st.markdown('<p class="centered-text">Look left to get an account</p>', unsafe_allow_html=True)
-            email = st.text_input("Email")
-            password = st.text_input("Password", type="password")
+            st.write("🚦Already have an account? Login here:")
+            
+            login_email = st.text_input("Email", key="login_email")
+            login_password = st.text_input("Password", type="password", key="login_password")
             
             col_a, col_b = st.columns(2)
             with col_a:
                 if st.button("Login", use_container_width=True):
-                    user = login_user(email, password)
+                    user = login_user(login_email, login_password)
                     if user:
                         st.session_state.user = user
                         st.session_state.page = "tagging"
@@ -357,23 +410,6 @@ if st.session_state.page == "login":
                         if "image_index" not in st.session_state:
                             st.session_state.image_index = 0
                         st.rerun()
-                    else:
-                        st.error("Login failed. Please check your email and password.")
-            
-            with col_b:
-                if st.button("🧪 🌲", use_container_width=True):
-                    # Create a development user with minimal permissions
-                    dev_user = {
-                        "uid": "dev-user-1234",
-                        "email": "dev@example.com",
-                        "display_name": "Developer"
-                    }
-                    st.session_state.user = dev_user
-                    st.session_state.page = "tagging"
-                    # Initialize image index in session state
-                    if "image_index" not in st.session_state:
-                        st.session_state.image_index = 0
-                    st.rerun()
                     
             st.markdown('</div>', unsafe_allow_html=True)
     
@@ -387,21 +423,93 @@ if st.session_state.page == "login":
             new_password = st.text_input("New Password", type="password")
             display_name = st.text_input("Your Display Name")
             if st.button("Create Account", use_container_width=True):
-                user_info = create_user(new_email, new_password, display_name)
-                if user_info:
-                    st.success("✅ Account created successfully!")
-                    
-                    if user_info.get("email_sent", False):
-                        st.info("📩 A verification email has been sent to your email address. Please check your inbox (including spam folder) and click the verification link.")
-                    else:
-                        st.warning("⚠️ We couldn't send a verification email automatically. Please contact support.")
+                try:
+                    # Show a status message
+                    with st.spinner("Creating account..."):
+                        st.info(f"Attempting to create account for: {new_email}")
                         
-                        # Show the manual verification link as a fallback
-                        with st.expander("Need the verification link?"):
-                            st.info("If you didn't receive the email, ask an administrator to check the application logs.")
-                else:
-                    st.error("Could not create account. Password must be at least 6 characters or try a different email.")
+                        # Add debugging to see what's happening
+                        user_info = create_user(new_email, new_password, display_name)
+                        
+                        if user_info:
+                            st.success("✅ Account created successfully!")
+                            
+                            if user_info.get("email_sent", False):
+                                st.info("📩 A verification email has been sent to your email address.")
+                            else:
+                                st.warning("⚠️ We couldn't send a verification email automatically.")
+                                
+                        else:
+                            st.error("Could not create account. Check your password (min 6 characters) or try a different email.")
+                            
+                            # Add fallback option when Firebase is unavailable
+                            st.info("Since Firebase is unavailable, would you like to use dev mode instead?")
+                            if st.button("Use Dev Mode"):
+                                # Create a development user with minimal permissions
+                                dev_user = {
+                                    "uid": f"dev-{hash(new_email)}",
+                                    "email": new_email,
+                                    "display_name": display_name or new_email.split('@')[0]
+                                }
+                                st.session_state.user = dev_user
+                                st.session_state.page = "tagging"
+                                # Initialize image index in session state
+                                if "image_index" not in st.session_state:
+                                    st.session_state.image_index = 0
+                                st.rerun()
+                except Exception as e:
+                    # Catch any uncaught errors
+                    st.error(f"Error during account creation: {str(e)}")
+                    
+                    # Provide fallback option
+                    st.info("Would you like to use dev mode instead?")
+                    if st.button("Use Dev Mode"):
+                        # Create a development user
+                        dev_user = {
+                            "uid": f"dev-{hash(new_email)}",
+                            "email": new_email,
+                            "display_name": display_name or new_email.split('@')[0]
+                        }
+                        st.session_state.user = dev_user
+                        st.session_state.page = "tagging"
+                        if "image_index" not in st.session_state:
+                            st.session_state.image_index = 0
+                        st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
+
+    if IS_DEV:
+        st.markdown("""
+            <div style="position: fixed; bottom: 10px; right: 15px; font-size: 32px; cursor: pointer;" 
+            onclick="window.devLogin()">
+                🌲
+            </div>
+            <script>
+            function devLogin() {
+                // This will submit the next form button after the tree is clicked
+                const buttons = document.querySelectorAll('button[kind="primaryFormSubmit"]');
+                if (buttons.length > 1) {
+                    buttons[1].click();
+                }
+            }
+            window.devLogin = devLogin;
+            </script>
+        """, unsafe_allow_html=True)
+
+    # Add a hidden button for the dev login functionality
+    if IS_DEV:
+        if st.button("Dev Login", key="hidden_dev_login", help="Developer mode login", visible=False):
+            # Create a development user with minimal permissions
+            dev_user = {
+                "uid": "dev-user-1234",
+                "email": "dev@example.com",
+                "display_name": "Developer"
+            }
+            st.session_state.user = dev_user
+            st.session_state.page = "tagging"
+            # Initialize image index in session state
+            if "image_index" not in st.session_state:
+                st.session_state.image_index = 0
+            st.rerun()
 
 # === Tagging UI ===
 elif st.session_state.page == "tagging":
@@ -478,8 +586,12 @@ elif st.session_state.page == "tagging":
             """)
             
     # Load image data for tagging
-    image_data = load_image_pairs()
-    image_data = validate_image_data(image_data)
+    image_data = validate_image_data(load_image_pairs())
+    
+    # Shuffle the data outside the cached function
+    random.seed(int(time.time()))
+    random.shuffle(image_data)
+    
     idx = st.session_state.image_index
 
     # Remove debug block - not needed in production
@@ -489,12 +601,13 @@ elif st.session_state.page == "tagging":
     # st.write("Image data length:", len(image_data) if image_data else "None")
     # st.write("Current image:", image_data[idx] if image_data and 0 <= idx < len(image_data) else "None or out of range")
 
-    if 0 <= idx < len(image_data):
+    if not image_data:
+        st.error("❌ No image data available. Please check your dataset or file paths.")
+    elif 0 <= idx < len(image_data):
         # Pass the ENTIRE image_data list, not just one item
         render_tagging_ui(image_data, st.session_state.user, idx)
     else:
         st.success("🎉 You've tagged all the images!")
-
     # === Sidebar Info with Art Elements Reference ===
     render_art_elements_sidebar()
     

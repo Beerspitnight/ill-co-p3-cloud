@@ -16,6 +16,8 @@ except ImportError:
         "Balance", "Emphasis", "Movement", "Pattern & Repetition", 
         "Rhythm", "Proportion", "Variety", "Unity"
     ]
+# Toggle to show extra dev info or test buttons
+IS_DEV = True
 
 # --- Step 1: Load Export Data (CSV + JSON)
 def load_export_data():

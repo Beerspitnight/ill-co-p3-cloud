@@ -477,12 +477,12 @@ elif st.session_state.page == "tagging":
     image_data = validate_image_data(image_data)
     idx = st.session_state.image_index
 
-    # Add debug information to help troubleshoot
-    st.write("DEBUG INFO:")
-    st.write("User:", st.session_state.get("user"))
-    st.write("Index:", idx)
-    st.write("Image data length:", len(image_data) if image_data else "None")
-    st.write("Current image:", image_data[idx] if image_data and 0 <= idx < len(image_data) else "None or out of range")
+    # Remove debug block - not needed in production
+    # st.write("DEBUG INFO:")
+    # st.write("User:", st.session_state.get("user"))
+    # st.write("Index:", idx)
+    # st.write("Image data length:", len(image_data) if image_data else "None")
+    # st.write("Current image:", image_data[idx] if image_data and 0 <= idx < len(image_data) else "None or out of range")
 
     if 0 <= idx < len(image_data):
         # Pass the ENTIRE image_data list, not just one item

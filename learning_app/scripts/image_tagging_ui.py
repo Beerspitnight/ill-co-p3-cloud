@@ -188,6 +188,14 @@ def render_tagging_ui(image_data, user_info, current_index=0):
             font-weight: bold !important;
             min-height: 90px !important;
         }
+        
+        /* Button styling for instruction buttons */
+        .stButton button {
+            background-color: white !important;
+            color: #1f77b4 !important;
+            border: 2px solid #1f77b4 !important;
+            font-weight: 600 !important;
+        }
     </style>
     """, unsafe_allow_html=True)
     
@@ -212,6 +220,29 @@ def render_tagging_ui(image_data, user_info, current_index=0):
     progress_text = f"Image {current_index + 1} of {len(image_data)}"
     st.progress((current_index + 1) / len(image_data))
     st.markdown(f"#### {progress_text}")
+    
+    # Updated instructions expander with close buttons
+    with st.expander("📘 Tagging Instructions", expanded=True) as instructions:
+        st.markdown("""
+        #### How to Tag
+        1. Review the image and caption
+        2. Select **Primary/Secondary Element**
+        3. Select **Primary/Secondary Principle**
+        4. (Optional) Leave a comment or flag the image
+        5. Click **Next Image** to continue
+        """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("✅ I'm ready to tag!", use_container_width=True):
+                st.session_state["_instructions_closed"] = True
+        with col2:
+            if st.button("🔎 I am nothing if not thorough!", use_container_width=True):
+                st.session_state["_instructions_closed"] = True
+
+    # Collapse instructions if user clicked either button
+    if st.session_state.get("_instructions_closed"):
+        st.experimental_rerun()
     
     # Create columns for layout
     col1, col2 = st.columns([0.6, 0.4])

@@ -159,6 +159,23 @@ def render_tagging_ui(image_data, user_info, current_index=0):
     """
     Render the main image tagging interface
     """
+    # Add the logo at the top of the tagging UI
+    st.markdown("""
+    <div style="
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+    ">
+        <img src="assets/logo.png" width="150" onerror="this.onerror=null; this.src='https://placehold.co/150x150/111/teal?text=Logo'; this.style.padding='10px';" style="
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+            background-color: #111;
+            padding: 10px;
+        "/>
+    </div>
+    """, unsafe_allow_html=True)
+    
     # Add custom CSS for larger buttons
     st.markdown("""
     <style>
@@ -602,4 +619,3 @@ def flag_image(image_item, user_email, flag_type="flagged"):
     except Exception as e:
         print(f"Error flagging image: {str(e)}")
         return False
-

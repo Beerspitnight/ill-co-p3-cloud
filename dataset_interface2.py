@@ -49,6 +49,72 @@ from learning_app.utils.firebase_service import get_all_tag_counts, get_user_tag
 from learning_app.scripts.auth import login_user, create_user
 from learning_app.scripts.image_tagging_ui import render_tagging_ui, render_download_ui
 
+# Add after your imports but before sidebar code
+def create_account(email, password, display_name):
+    """Centralized account creation function with validation"""
+    # Basic validation
+    if not email or "@" not in email or "." not in email:
+        st.error("Please enter a valid email address")
+        return None
+        
+    if not password or len(password) < 6:
+        st.error("Password must be at least 6 characters")
+        return None
+        
+    if not display_name:
+        st.warning("Using email username as display name")
+        display_name = email.split('@')[0]
+    
+    try:
+        # Show a status message
+        with st.spinner("Creating account..."):
+            # Add debugging to see what's happening
+            user_info = create_user(email, password, display_name)
+            
+            if user_info:
+                st.success("✅ Account created successfully!")
+                
+                if user_info.get("email_sent", False):
+                    st.info("📩 A verification email has been sent to your email address.")
+                else:
+                    st.warning("⚠️ We couldn't send a verification email automatically.")
+                
+                # Log the user in automatically
+                st.session_state.user = user_info
+                st.session_state.page = "tagging"
+                if "image_index" not in st.session_state:
+                    st.session_state.image_index = 0
+                
+                # Return success
+                return user_info
+            else:
+                st.error("Could not create account. Check your password (min 6 characters) or try a different email.")
+                return None
+    except Exception as e:
+        # Catch any uncaught errors
+        st.error(f"Error during account creation: {str(e)}")
+        return None
+
+def enable_dev_mode(email=None, display_name=None):
+    """Enable developer mode with a mock user"""
+    if not email:
+        email = "dev@example.com"
+    if not display_name:
+        display_name = email.split('@')[0]
+        
+    dev_user = {
+        "uid": f"dev-{hash(email or 'default')}",
+        "email": email,
+        "display_name": display_name,
+        "is_dev_mode": True  # Flag to identify dev mode users
+    }
+    st.session_state.user = dev_user
+    st.session_state.page = "tagging"
+    if "image_index" not in st.session_state:
+        st.session_state.image_index = 0
+    st.success("🧪 Developer mode enabled")
+    return dev_user
+
 # === Data Loading Function ===
 @st.cache_data(ttl=3600)  # Cache for 1 hour max
 def load_image_pairs():
@@ -186,6 +252,25 @@ if "image_index" not in st.session_state:
 if "auth_mode" not in st.session_state:
     st.session_state.auth_mode = "Login"
 
+# Add the logo at the top of the main UI
+st.markdown("""
+<div style="
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+">
+    <img src="assets/logo.png" width="150" 
+    onerror="this.onerror=null; this.src='https://placehold.co/150x150/111/teal?text=Logo'; this.style.padding='10px';" 
+    style="
+        border-radius: 12px;
+        box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
+        background-color: #111;
+        padding: 10px;
+    "/>
+</div>
+""", unsafe_allow_html=True)
+
 # === Sidebar with Create Account only ===
 with st.sidebar:
     if "user" not in st.session_state or not st.session_state.user:
@@ -210,57 +295,14 @@ with st.sidebar:
         display_name = st.text_input("Your name", key="sidebar_name")
 
         if st.button("Create Account", use_container_width=True):
-            try:
-                # Show a status message
-                with st.spinner("Creating account..."):
-                    st.info(f"Attempting to create account for: {email}")
-                    
-                    # Add debugging to see what's happening
-                    user_info = create_user(email, password, display_name)
-                    
-                    if user_info:
-                        st.success("✅ Account created successfully!")
-                        
-                        if user_info.get("email_sent", False):
-                            st.info("📩 A verification email has been sent to your email address.")
-                        else:
-                            st.warning("⚠️ We couldn't send a verification email automatically.")
-                            
-                    else:
-                        st.error("Could not create account. Check your password (min 6 characters) or try a different email.")
-                        
-                        # Add fallback option when Firebase is unavailable
-                        st.info("Since Firebase is unavailable, would you like to use dev mode instead?")
-                        if st.button("Use Dev Mode"):
-                            # Create a development user with minimal permissions
-                            dev_user = {
-                                "uid": f"dev-{hash(email)}",
-                                "email": email,
-                                "display_name": display_name or email.split('@')[0]
-                            }
-                            st.session_state.user = dev_user
-                            st.session_state.page = "tagging"
-                            # Initialize image index in session state
-                            if "image_index" not in st.session_state:
-                                st.session_state.image_index = 0
-                            st.rerun()
-            except Exception as e:
-                # Catch any uncaught errors
-                st.error(f"Error during account creation: {str(e)}")
-                
+            user_info = create_account(email, password, display_name)
+            if user_info:  # If account creation was successful
+                st.rerun()  # Refresh the page
+            else:
                 # Provide fallback option
                 st.info("Would you like to use dev mode instead?")
                 if st.button("Use Dev Mode"):
-                    # Create a development user
-                    dev_user = {
-                        "uid": f"dev-{hash(email)}",
-                        "email": email,
-                        "display_name": display_name or email.split('@')[0]
-                    }
-                    st.session_state.user = dev_user
-                    st.session_state.page = "tagging"
-                    if "image_index" not in st.session_state:
-                        st.session_state.image_index = 0
+                    enable_dev_mode(email, display_name)
                     st.rerun()
     else:
         # For logged-in users, show user info and logout option
@@ -309,7 +351,7 @@ def render_art_elements_sidebar():
                 "principles/unity": "https://via.placeholder.com/300x200?text=Unity"
             }
             # Create the directory if it doesn't exist
-            os.makedirs(os.path.dirname(qr_urls_path), exist_ok=True)
+            os.makedirs(os.path.dirname(qr_urls_path), exist_okay=True)
             # Save the sample structure for future use
             with open(qr_urls_path, "w") as f:
                 json.dump(qr_urls, f, indent=2)
@@ -423,57 +465,14 @@ if st.session_state.page == "login":
             new_password = st.text_input("New Password", type="password")
             display_name = st.text_input("Your Display Name")
             if st.button("Create Account", use_container_width=True):
-                try:
-                    # Show a status message
-                    with st.spinner("Creating account..."):
-                        st.info(f"Attempting to create account for: {new_email}")
-                        
-                        # Add debugging to see what's happening
-                        user_info = create_user(new_email, new_password, display_name)
-                        
-                        if user_info:
-                            st.success("✅ Account created successfully!")
-                            
-                            if user_info.get("email_sent", False):
-                                st.info("📩 A verification email has been sent to your email address.")
-                            else:
-                                st.warning("⚠️ We couldn't send a verification email automatically.")
-                                
-                        else:
-                            st.error("Could not create account. Check your password (min 6 characters) or try a different email.")
-                            
-                            # Add fallback option when Firebase is unavailable
-                            st.info("Since Firebase is unavailable, would you like to use dev mode instead?")
-                            if st.button("Use Dev Mode"):
-                                # Create a development user with minimal permissions
-                                dev_user = {
-                                    "uid": f"dev-{hash(new_email)}",
-                                    "email": new_email,
-                                    "display_name": display_name or new_email.split('@')[0]
-                                }
-                                st.session_state.user = dev_user
-                                st.session_state.page = "tagging"
-                                # Initialize image index in session state
-                                if "image_index" not in st.session_state:
-                                    st.session_state.image_index = 0
-                                st.rerun()
-                except Exception as e:
-                    # Catch any uncaught errors
-                    st.error(f"Error during account creation: {str(e)}")
-                    
+                user_info = create_account(new_email, new_password, display_name)
+                if user_info:  # If account creation was successful
+                    st.rerun()  # Refresh the page
+                else:
                     # Provide fallback option
                     st.info("Would you like to use dev mode instead?")
                     if st.button("Use Dev Mode"):
-                        # Create a development user
-                        dev_user = {
-                            "uid": f"dev-{hash(new_email)}",
-                            "email": new_email,
-                            "display_name": display_name or new_email.split('@')[0]
-                        }
-                        st.session_state.user = dev_user
-                        st.session_state.page = "tagging"
-                        if "image_index" not in st.session_state:
-                            st.session_state.image_index = 0
+                        enable_dev_mode(new_email, display_name)
                         st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 

@@ -11,15 +11,19 @@ import logging
 try:
     from learning_app.scripts.constants import ELEMENT_OPTIONS, PRINCIPLE_OPTIONS
 except ImportError:
-    # Fallback if import fails
-    logging.warning("Failed to import ELEMENT_OPTIONS and PRINCIPLE_OPTIONS from constants. Using fallback values.")
-    ELEMENT_OPTIONS = [
-        "Line", "Shape", "Form", "Color", "Value", "Space", "Texture"
-    ]
-    PRINCIPLE_OPTIONS = [
-        "Balance", "Emphasis", "Movement", "Pattern & Repetition", 
-        "Rhythm", "Proportion", "Variety", "Unity"
-    ]
+    # Try a relative import as fallback
+    try:
+        from .constants import ELEMENT_OPTIONS, PRINCIPLE_OPTIONS
+    except ImportError:
+        # Fallback if import fails
+        logging.warning("Failed to import ELEMENT_OPTIONS and PRINCIPLE_OPTIONS from constants. Using fallback values.")
+        ELEMENT_OPTIONS = [
+            "Line", "Shape", "Form", "Color", "Value", "Space", "Texture"
+        ]
+        PRINCIPLE_OPTIONS = [
+            "Balance", "Emphasis", "Movement", "Pattern & Repetition", 
+            "Rhythm", "Proportion", "Variety", "Unity"
+        ]
 
 # Toggle to show extra dev info or test buttons
 IS_DEV = False

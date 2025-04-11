@@ -1,0 +1,58 @@
+{
+  "lesson_id": "mit_6.831_lec08_simplicity",
+  "course": "MIT 6.831 - User Interface Design",
+  "lecture_title": "Lecture 8: Generating Designs & Simplicity",
+  "source_file": "MIT6_831S11_lec08.pdf",
+  "date_created": "2025-04-09T21:56:27.697377",
+  "design_principles": [
+    {
+      "name": "Simplicity",
+      "definition": "Simplicity is achieved by removing non-essential elements and reducing visual noise, leading to better usability.",
+      "techniques": [
+        {
+          "name": "Reduction",
+          "steps": [
+            "Decide what must be conveyed by the design.",
+            "Critically evaluate every UI element.",
+            "Remove any element that isn\u2019t essential."
+          ],
+          "example": "Google\u2019s homepage removes all nonessential links to focus entirely on the search bar."
+        },
+        {
+          "name": "Combination",
+          "steps": [
+            "Use UI elements that serve multiple purposes.",
+            "Leverage affordances that support multiple mental models (e.g., scroll thumb for position + navigation)."
+          ],
+          "example": "Scrollbars combine dragging, position indicator, and visible range feedback."
+        }
+      ]
+    }
+  ],
+  "quotes": [
+    "Simplicity is a process of elimination, not accretion.",
+    "Sketching many ideas helps prevent fixation on an early, suboptimal design."
+  ],
+  "references": [
+    {
+      "text": "Designing Interfaces by Jenifer Tidwell",
+      "link": "http://designinginterfaces.com/"
+    },
+    {
+      "text": "Sketching User Experiences by Bill Buxton",
+      "link": "https://www.elsevier.com/books/sketching-user-experiences/buxton/978-0-12-374037-3"
+    }
+  ],
+  "example_analysis": [
+    {
+      "title": "Ghostview vs. Acrobat",
+      "summary": "Ghostview and Acrobat use opposite scrolling metaphors, leading to potential confusion if used interchangeably.",
+      "principle": "Mental Model Consistency"
+    },
+    {
+      "title": "FileMatrix vs. Google",
+      "summary": "FileMatrix overloads users with complexity, whereas Google\u2019s homepage exemplifies reduction and visual simplicity.",
+      "principle": "Simplicity and Contrast"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+.
+├── __pycache__
+│   ├── dataset_interface2.cpython-312.pyc
+│   ├── local_settings.cpython-312.pyc
+│   └── local_settings_oldish.cpython-312.pyc
+├── copilot_interface
+│   ├── README.md
+│   ├── app.py
+│   ├── scripts
+│   ├── static
+│   ├── templates
+│   ├── tests
+│   └── utils
+├── dataset_interface2.py
+├── file_tree.txt
+├── ill-co-p3.2.code-workspace
+├── learning_app
+│   ├── README.md
+│   ├── README_html_scrapes.md
+│   ├── __init__.py
+│   ├── __pycache__
+│   ├── curriculum
+│   ├── data
+│   ├── instructions.md
+│   ├── output
+│   ├── queries
+│   ├── scripts
+│   ├── search_terms
+│   ├── styles
+│   ├── templates
+│   ├── utility_scripts
+│   └── utils
+├── requirements.txt
+└── venv
+    ├── bin
+    ├── etc
+    ├── images
+    ├── include
+    ├── lib
+    ├── pyvenv.cfg
+    └── share
+
+27 directories, 14 files

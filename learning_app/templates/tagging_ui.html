@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ill-Co-P3 Tagging UI</title>
+  <link rel="stylesheet" href="/Users/bmcmanus/Documents/my_docs/portfolio/ill-co-p3.2/learning_app/styles/tagging_ui.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <h2>Quick Reference</h2>
+
+      <div class="ref-section">
+        Elements of Art & Design
+        <div class="popup-content">
+          <ul>
+            <li onmouseover="showPreview('LINE')">LINE</li>
+            <li onmouseover="showPreview('SHAPE')">SHAPE</li>
+            <li onmouseover="showPreview('FORM')">FORM</li>
+            <li onmouseover="showPreview('COLOR')">COLOR</li>
+            <li onmouseover="showPreview('VALUE')">VALUE</li>
+            <li onmouseover="showPreview('SPACE')">SPACE</li>
+            <li onmouseover="showPreview('TEXTURE')">TEXTURE</li>
+          </ul>
+          <div id="elementPreview" class="preview-box"></div>
+        </div>
+      </div>
+
+      <div class="ref-section">
+        Principles of Art & Design
+        <div class="popup-content">
+          <ul>
+            <li onmouseover="showPreview('BALANCE')">BALANCE</li>
+            <li onmouseover="showPreview('EMPHASIS')">EMPHASIS</li>
+            <li onmouseover="showPreview('MOVEMENT')">MOVEMENT</li>
+            <li onmouseover="showPreview('PATTERN')">PATTERN & REPETITION</li>
+            <li onmouseover="showPreview('RHYTHM')">RHYTHM</li>
+            <li onmouseover="showPreview('PROPORTION')">PROPORTION</li>
+            <li onmouseover="showPreview('VARIETY')">VARIETY</li>
+            <li onmouseover="showPreview('UNITY')">UNITY</li>
+          </ul>
+          <div id="principlePreview" class="preview-box"></div>
+        </div>
+      </div>
+
+      <div class="ref-section">
+        Tagging Guide
+        <div class="popup-content">
+          <p>Use dropdowns to select the best design descriptors.</p>
+          <p>Use GPT Suggestion for guidance before tagging.</p>
+        </div>
+      </div>
+
+      <div class="download-controls">
+        <button id="downloadTagged">Download Tagged Results</button>
+        <button id="downloadFailed">Download Failed Results</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="tagging-area">
+      <div class="top-bar">
+        <span id="userCount">My Count: 0</span>
+        <span id="collectiveCount">Collective Count: 0</span>
+        <a href="#" id="logoutBtn">Log Out</a>
+      </div>
+
+      <div class="gpt-section">
+        <h3>GPT Suggestion Pending...</h3>
+        <p>Waiting for GPT to analyze the prompt...</p>
+      </div>
+
+      <div class="image-container" id="imageContainer" style="display:none;">
+        <img id="taggingImage" src="" alt="Design example" />
+        <p id="imageCaption">Caption text goes here...</p>
+      </div>
+
+      <div class="tag-controls">
+        <div>
+          <label>Primary Element:</label>
+          <select id="primaryElement"></select>
+          <label>Secondary Element:</label>
+          <select id="secondaryElement"></select>
+        </div>
+        <div>
+          <label>Primary Principle:</label>
+          <select id="primaryPrinciple"></select>
+          <label>Secondary Principle:</label>
+          <select id="secondaryPrinciple"></select>
+          <div class="flag-row">
+            <label><input type="checkbox" id="rejectFlag" /> ❌ Reject</label>
+            <label><input type="checkbox" id="offensiveFlag" /> ⚠️ Offensive Image</label>
+          </div>
+        </div>
+        <div>
+          <label>Tagger Comments:</label>
+          <textarea id="taggerComments" rows="3"></textarea>
+          <button id="gptSuggest">GPT Suggestion</button>
+        </div>
+      </div>
+
+      <div class="footer-bar">
+        <span id="userCountFooter">My Count: 0</span>
+        <span id="collectiveCountFooter">Collective Count: 0</span>
+        <a href="#" id="logoutBtnFooter">Log Out</a>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    function showPreview(label) {
+      const preview = label.includes("BAL") || label.includes("EMP") || label.includes("MOV") || label.includes("PAT") || label.includes("RHY") || label.includes("PRO") || label.includes("VAR") || label.includes("UNI")
+        ? document.getElementById("principlePreview")
+        : document.getElementById("elementPreview");
+      preview.innerHTML = `<img src='/sample_${label.toLowerCase()}.png' class='image-preview'/><p>Example of ${label}</p>`;
+    }
+
+    window.onload = function() {
+      setTimeout(() => {
+        document.getElementById("imageContainer").style.display = "block";
+        document.getElementById("taggingImage").src = "/path_to_image.jpg"; // placeholder
+      }, 2000);
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+/* learning_app/styles/tagging.css */
+body {
+    font-family: 'Segoe UI', sans-serif;
+  }
+  
+  .sidebar .element-container, .sidebar .principle-container {
+    margin-bottom: 10px;
+  }
+  
+  button, .stButton button {
+    border-radius: 8px;
+    font-weight: bold;
+  }
+  
+  textarea {
+    min-height: 100px;
+  }
+  

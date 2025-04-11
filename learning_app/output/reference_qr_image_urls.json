@@ -1,0 +1,17 @@
+{
+  "elements/space": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/elements/space.png",
+  "elements/shape": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/elements/shape.png",
+  "elements/value": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/elements/value.png",
+  "elements/color": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/elements/color.png",
+  "elements/texture": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/elements/texture.png",
+  "elements/form": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/elements/form.png",
+  "elements/line": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/elements/line.png",
+  "principles/unity": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/principles/unity.png",
+  "principles/empahsis": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/principles/empahsis.png",
+  "principles/movement": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/principles/movement.png",
+  "principles/variety": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/principles/variety.png",
+  "principles/pattern": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/principles/pattern.png",
+  "principles/rhythm ": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/principles/rhythm%20.png",
+  "principles/balance": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/principles/balance.png",
+  "principles/proportion": "https://storage.googleapis.com/ill-co-p3-learns.firebasestorage.app/reference_qr/principles/proportion.png"
+}

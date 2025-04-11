@@ -1,0 +1,42 @@
+/* Customize the sidebar */
+.sidebar .sidebar-content {
+    background-color: #1f1f1f; /* Dark background */
+    color: #ffffff;
+}
+
+/* Style headers in the main area */
+h1, h2, h3 {
+    font-family: "Trebuchet MS", sans-serif;
+    color: #ff9900; /* Example accent color */
+}
+
+/* Style text areas */
+textarea {
+    background-color: #2f2f2f;
+    color: #ffffff;
+    border: 1px solid #555555;
+}
+
+/* Add a custom class you can apply in your code */
+.custom-box {
+    border: 2px solid #ff9900;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+/* Image display styling from dataset_interface2.py */
+.stImage img {
+    max-height: 500px;
+    object-fit: contain;
+}
+.stImage {
+    display: flex;
+    justify-content: center;
+}
+.css-18e3th9 {
+    padding-top: 0;
+}
+.stButton button {
+    width: 100%;
+}

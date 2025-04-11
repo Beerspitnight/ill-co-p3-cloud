@@ -1,0 +1,56 @@
+# Ignore Python cache and compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Ignore virtual environment
+venv/
+.env
+.env.*
+
+
+# Ignore Jupyter or temporary notebooks
+*.ipynb
+*.ipynb_checkpoints
+
+# Ignore system and IDE files
+.DS_Store
+.vscode/
+.idea/
+
+# Ignore logs and temp files
+*.log
+*.bak
+*.tmp
+
+# Ignore credentials and secret keys
+secrets/
+.secrets/
+*.jsonl
+*.toml
+*.csv
+
+# Ignore learning_app subfolders
+learning_app/output/pairs/tagged_results*.csv
+learning_app/output/pairs/tagged_results*.json
+learning_app/output/pairs/gpt_labeled_sample.json
+learning_app/output/full_text_books/
+learning_app/output/failures/
+learning_app/data/gutenberg_clean_filtered/
+learning_app/data/mit_full_course_download/
+learning_app/data/html_mit/
+learning_app/data/html_berkeley/
+learning_app/queries/
+learning_app/output/books_enriched/
+learning_app/output/books_google/
+learning_app/output/html_scrapes/
+learning_app/data/html_openlibrary/
+learning_app/utility_scripts/
+
+
+# Ignore Firebase or API tokens (if any)
+*.key
+*.pem
+*.crt

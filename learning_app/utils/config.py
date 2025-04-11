@@ -4,6 +4,9 @@ import toml
 # Define the path to the secrets file
 SECRETS_PATH = "/Users/bmcmanus/Documents/my_docs/portfolio/secrets/secrets.toml"
 
+# Define development mode flag
+IS_DEV = os.getenv('DEVELOPMENT_MODE', 'False').lower() in ('true', '1', 't')
+
 def load_environment():
     """Load environment variables from .env file or secrets"""
     try:

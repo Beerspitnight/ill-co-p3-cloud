@@ -496,19 +496,35 @@ if st.session_state.page == "login":
 
     # Add a hidden button for the dev login functionality
     if IS_DEV:
-        if st.button("Dev Login", key="hidden_dev_login", help="Developer mode login", visible=False):
-            # Create a development user with minimal permissions
-            dev_user = {
-                "uid": "dev-user-1234",
-                "email": "dev@example.com",
-                "display_name": "Developer"
+        # Use a container with CSS to hide the button instead of using visible=False
+        with st.container():
+            st.markdown("""
+            <style>
+            /* Hide the dev login button container but keep it functional */
+            [data-testid="stButton"]:has(button:contains("Dev Login")) {
+                position: absolute;
+                visibility: hidden;
+                height: 0;
+                width: 0;
+                margin: 0;
+                padding: 0;
             }
-            st.session_state.user = dev_user
-            st.session_state.page = "tagging"
-            # Initialize image index in session state
-            if "image_index" not in st.session_state:
-                st.session_state.image_index = 0
-            st.rerun()
+            </style>
+            """, unsafe_allow_html=True)
+            
+            if st.button("Dev Login", key="hidden_dev_login", help="Developer mode login"):
+                # Create a development user with minimal permissions
+                dev_user = {
+                    "uid": "dev-user-1234",
+                    "email": "dev@example.com",
+                    "display_name": "Developer"
+                }
+                st.session_state.user = dev_user
+                st.session_state.page = "tagging"
+                # Initialize image index in session state
+                if "image_index" not in st.session_state:
+                    st.session_state.image_index = 0
+                st.rerun()
 
 # === Tagging UI ===
 elif st.session_state.page == "tagging":

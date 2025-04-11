@@ -5,27 +5,77 @@ import toml
 SECRETS_PATH = "/Users/bmcmanus/Documents/my_docs/portfolio/secrets/secrets.toml"
 
 def load_environment():
-    """Load environment variables from the secrets TOML file"""
+    """Load environment variables from .env file or secrets"""
     try:
-        # Load secrets from TOML file
-        secrets = toml.load(SECRETS_PATH)
+        # First try the standard streamlit secrets
+        import streamlit as st
         
-        # Set environment variables from secrets
-        os.environ["FIREBASE_ADMIN_CREDENTIAL_PATH"] = SECRETS_PATH  # We'll extract Firebase creds directly
+        # Check if we're running in Streamlit Cloud (secrets available directly)
+        if hasattr(st, 'secrets') and 'FIREBASE' in st.secrets:
+            print("✅ Using Streamlit Cloud secrets")
+            # Set environment variables from Streamlit secrets
+            os.environ['FIREBASE_ADMIN_CREDENTIAL_PATH'] = st.secrets.get('FIREBASE_ADMIN_CREDENTIAL_PATH', '')
+            os.environ['FIREBASE_DATABASE_URL'] = st.secrets.get('FIREBASE', {}).get('DATABASE_URL', '')
+            os.environ['OPENAI_API_KEY'] = st.secrets.get('OPENAI', {}).get('OPENAI_API_KEY', '')
+            
+            # When in Streamlit Cloud, create a temp credentials file from the JSON string in secrets
+            if 'FIREBASE_CREDENTIALS_JSON' in st.secrets:
+                import tempfile
+                import json
+                
+                # Create a temporary file for the Firebase credentials
+                fd, path = tempfile.mkstemp(suffix='.json')
+                with os.fdopen(fd, 'w') as f:
+                    json.dump(st.secrets['FIREBASE_CREDENTIALS_JSON'], f)
+                
+                # Set the path to the temp file
+                os.environ['FIREBASE_ADMIN_CREDENTIAL_PATH'] = path
+                print(f"✅ Created temporary Firebase credentials file at {path}")
+            
+            return True
+            
+        # If not in Streamlit Cloud or missing secrets, try local files
+        print("⚠️ Streamlit secrets not found or incomplete, trying local files")
         
-        # Set OpenAI API key
-        os.environ["OPENAI_API_KEY"] = secrets["OPENAI"]["OPENAI_API_KEY"]
+        # Try multiple possible locations for the secrets.toml file
+        possible_paths = [
+            os.path.join(os.path.dirname(__file__), '..', '..', '..', 'secrets', 'secrets.toml'),  # Portfolio/secrets
+            os.path.join(os.path.dirname(__file__), '..', '..', 'secrets.toml'),  # Project root
+            os.path.expanduser('~/Documents/my_docs/portfolio/secrets/secrets.toml'),  # Absolute path
+            '.streamlit/secrets.toml'  # Standard Streamlit location
+        ]
         
-        # Set Google Books API key
-        os.environ["GOOGLE_BOOKS_API_KEY"] = secrets["GOOGLE"]["GOOGLE_BOOKS_API_KEY"]
+        for path in possible_paths:
+            if os.path.exists(path):
+                print(f"✅ Found secrets.toml at {path}")
+                # Parse the TOML file manually
+                with open(path, 'r') as f:
+                    import toml
+                    secrets_data = toml.load(f)
+                
+                # Set environment variables from the parsed secrets
+                if 'FIREBASE' in secrets_data:
+                    os.environ['FIREBASE_DATABASE_URL'] = secrets_data['FIREBASE'].get('DATABASE_URL', '')
+                if 'FIREBASE_ADMIN_CREDENTIAL_PATH' in secrets_data:
+                    os.environ['FIREBASE_ADMIN_CREDENTIAL_PATH'] = secrets_data['FIREBASE_ADMIN_CREDENTIAL_PATH']
+                if 'OPENAI' in secrets_data and 'OPENAI_API_KEY' in secrets_data['OPENAI']:
+                    os.environ['OPENAI_API_KEY'] = secrets_data['OPENAI']['OPENAI_API_KEY']
+                
+                return True
         
-        # Set Firebase database URL (using a default if not in secrets)
-        os.environ["FIREBASE_DATABASE_URL"] = secrets.get("FIREBASE_CONFIG", {}).get(
-            "databaseURL", "https://ill-co-p3-learns-default-rtdb.firebaseio.com"
-        )
+        # If all else fails, provide fallbacks for development
+        if IS_DEV:
+            print("⚠️ Using development mode fallbacks for missing credentials")
+            # Set up minimal environment for dev mode (empty Firebase, placeholder OpenAI)
+            os.environ['FIREBASE_DATABASE_URL'] = ''
+            os.environ['FIREBASE_ADMIN_CREDENTIAL_PATH'] = ''
+            os.environ['OPENAI_API_KEY'] = 'sk-placeholder-for-dev-mode'
+            return True
         
-        print("✅ Environment loaded from secrets.toml")
-        return True
+        # If not in dev mode and no credentials found, log an error
+        print("❌ Could not find secrets.toml in any expected location")
+        return False
+        
     except Exception as e:
         print(f"⚠️ Error loading environment: {e}")
         return False

@@ -188,6 +188,8 @@ def render_tagging_ui(image_data, user_info, current_index=0):
             font-weight: bold !important;
             min-height: 90px !important;
         }
+        
+        /* REMOVED: The generic button styling that was causing conflicts */
     </style>
     """, unsafe_allow_html=True)
     

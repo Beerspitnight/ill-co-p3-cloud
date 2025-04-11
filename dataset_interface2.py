@@ -350,25 +350,7 @@ if st.session_state.page == "login":
             with col_a:
                 if st.button("Login", use_container_width=True):
                     user = login_user(email, password)
-                    if user:
-                        st.session_state.user = user
-                        st.session_state.page = "tagging"  # Set redirect to tagging page
-                        st.rerun()  # Forces reload with authenticated state
-                    else:
-                        st.warning("Login failed. Did you verify your email?")
-            
-            with col_b:
-                # Add the dev mode button
-                if st.button("🧪 Dev Mode", use_container_width=True):
-                    # Create a dev user with admin privileges
-                    st.session_state.user = {
-                        "display_name": "Developer",
-                        "email": "dev@example.com",
-                        "uid": "dev-user-123",
-                        "auth_type": "dev"
-                    }
-                    st.session_state.page = "tagging"
-                    st.rerun()
+                    # Process login result here
                     
             st.markdown('</div>', unsafe_allow_html=True)
     

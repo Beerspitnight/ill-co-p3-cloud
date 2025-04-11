@@ -3,12 +3,16 @@ from datetime import datetime
 import os
 import json
 import pandas as pd
-import time
+import csv
+import traceback
+import logging
+
 # Import constants from the constants file instead of dataset_interface2
 try:
     from learning_app.scripts.constants import ELEMENT_OPTIONS, PRINCIPLE_OPTIONS
 except ImportError:
     # Fallback if import fails
+    logging.warning("Failed to import ELEMENT_OPTIONS and PRINCIPLE_OPTIONS from constants. Using fallback values.")
     ELEMENT_OPTIONS = [
         "Line", "Shape", "Form", "Color", "Value", "Space", "Texture"
     ]
@@ -16,11 +20,13 @@ except ImportError:
         "Balance", "Emphasis", "Movement", "Pattern & Repetition", 
         "Rhythm", "Proportion", "Variety", "Unity"
     ]
+
 # Toggle to show extra dev info or test buttons
 IS_DEV = False
 
-# --- Step 1: Load Export Data (CSV + JSON)
+# --- Data management functions ---
 def load_export_data():
+    """Load tagging export data from CSV and JSON files"""
     export_dir = "learning_app/output/pairs"
     csv_path = os.path.join(export_dir, "tagged_results_export.csv")
     json_path = os.path.join(export_dir, "tagged_results_export.json")
@@ -48,14 +54,15 @@ def load_export_data():
             json_data = []
             with open(json_path, "w") as f:
                 json.dump(json_data, f)
-                
-        return csv_data, json.dumps(json_data, indent=2)
         
+        return csv_data, json.dumps(json_data)
+                
     except Exception as e:
         print(f"Error in load_export_data: {str(e)}")
-        return "image_id,text,rejected,flagged,tagger,tags\n", "[]"
+        print("Traceback:")
+        traceback.print_exc()
+        return "", "[]"
 
-# --- Step 2: Generate Failures CSV (flagged OR rejected)
 def export_failures():
     """Generate a CSV of failures (rejected or flagged items)"""
     input_path = "learning_app/output/pairs/tagged_results_export.json"
@@ -78,12 +85,15 @@ def export_failures():
             else:
                 # If it's neither a list nor a dict, make an empty list
                 data = []
-
+        
+        # Initialize failure_rows list
         failure_rows = []
+        
+        # Loop through all items in the data
         for item in data:
             # Skip items that aren't dictionaries (like simple strings)
             if not isinstance(item, dict):
-                print(f"Skipping non-dictionary item: {item}")
+                logging.warning(f"Skipping non-dictionary item: {item}")
                 continue
                 
             # Now safely access dictionary attributes
@@ -105,15 +115,215 @@ def export_failures():
             pd.DataFrame(columns=["image_id", "text", "rejected", "flagged", "tagger", "tags"]).to_csv(output_path, index=False)
             
     except Exception as e:
-        print(f"Error exporting failures: {str(e)}")
+        logging.error(f"Error exporting failures: {str(e)}")
         # Create an empty CSV with headers if there's an error
         pd.DataFrame(columns=["image_id", "text", "rejected", "flagged", "tagger", "tags"]).to_csv(output_path, index=False)
 
-# --- Step 3: Run export before UI loads (but not at import time)
 def init_exports():
+    """Initialize exports at startup"""
     export_failures()
 
-# --- Step 4: Display buttons in Streamlit sidebar (moved to function)
+# --- Tag caching system ---
+tag_cache = []
+
+def flush_tag_cache():
+    """Flush the in-memory tag cache to the files."""
+    global tag_cache
+    if not tag_cache:
+        return
+
+    try:
+        export_dir = "learning_app/output/pairs"
+        os.makedirs(export_dir, exist_ok=True)
+
+        # Update JSON file
+        json_path = os.path.join(export_dir, "tagged_results_export.json")
+        try:
+            with open(json_path, "r") as f:
+                existing_data = json.load(f)
+                if not isinstance(existing_data, list):
+                    existing_data = []
+        except (FileNotFoundError, json.JSONDecodeError):
+            existing_data = []
+
+        # Merge cache into existing data
+        for tag_data in tag_cache:
+            updated = False
+            for i, item in enumerate(existing_data):
+                if item.get("image_id") == tag_data["image_id"]:
+                    existing_data[i] = tag_data
+                    updated = True
+                    break
+            if not updated:
+                existing_data.append(tag_data)
+
+        # Save updated data
+        with open(json_path, "w") as f:
+            json.dump(existing_data, f, indent=2)
+
+        # Update CSV file
+        csv_path = os.path.join(export_dir, "tagged_results_export.csv")
+        df = pd.DataFrame(existing_data)
+        df.to_csv(csv_path, index=False)
+
+        # Clear the cache
+        tag_cache = []
+    except Exception as e:
+        print(f"Error flushing tag cache: {str(e)}")
+
+def save_current_tags(image_item, tags, user_email, user_info=None):
+    """Save the current image tags to the in-memory cache."""
+    global tag_cache
+    try:
+        image_id = image_item.get("id", image_item.get("image_id", str(hash(image_item.get("image", "")))))
+        uid = user_info.get("uid", f"email-{hash(user_email)}") if user_info else f"email-{hash(user_email)}"
+        display_name = user_info.get("display_name", user_email.split('@')[0]) if user_info else user_email.split('@')[0]
+
+        tag_data = {
+            "image_id": image_id,
+            "text": image_item.get("text", ""),
+            "image_url": image_item.get("image", ""),
+            "tags": tags,
+            "tagger": user_email,
+            "uid": uid,
+            "display_name": display_name,
+            "timestamp": pd.Timestamp.now().isoformat()
+        }
+
+        # Add to cache
+        tag_cache.append(tag_data)
+
+        # Optionally flush cache if it exceeds a certain size
+        if len(tag_cache) >= 10:  # Adjust the batch size as needed
+            flush_tag_cache()
+        return True
+    except Exception as e:
+        print(f"Error saving tags: {str(e)}")
+        return False
+
+# --- Error handling for offensive content ---
+def try_mark_as_offensive(item, email):
+    """Safely mark an image as offensive with error handling"""
+    try:
+        mark_as_offensive(item, email)
+    except Exception as e:
+        import traceback
+        error_message = f"Error marking image as offensive: {e}"
+        print(error_message)
+        traceback.print_exc()
+        st.error(error_message)
+
+def mark_as_offensive(item, user_email):
+    """Mark an image as offensive and log it for removal"""
+    try:
+        # Create offensive images directory if it doesn't exist
+        output_dir = "learning_app/output/offensive_images"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Create or append to offensive images log
+        log_path = os.path.join(output_dir, "offensive_images.csv")
+        
+        # Prepare data
+        timestamp = datetime.now().isoformat()
+        image_id = item.get("id", item.get("image_id", str(hash(item.get("image", "")))))
+        item_data = {
+            "timestamp": timestamp,
+            "image_id": image_id,
+            "image_url": item.get("image", ""),
+            "text": item.get("text", ""),
+            "flagged_by": user_email
+        }
+        
+        # Append directly to the CSV file
+        file_exists = os.path.exists(log_path)
+        with open(log_path, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=["timestamp", "image_id", "image_url", "text", "flagged_by"])
+            if not file_exists:
+                writer.writeheader()  # Write header only if file doesn't exist
+            writer.writerow(item_data)
+        
+        # Also save to a JSON file for backup
+        json_path = os.path.join(output_dir, "offensive_images.json")
+        try:
+            with open(json_path, "r") as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = []
+        data.append(item_data)
+        
+        with open(json_path, "w") as f:
+            json.dump(data, f, indent=2)
+            
+        # Update the image item with offensive flag in firebase if available
+        item_with_flag = {**item, "offensive": True}
+        
+        # Call appropriate save function - using flag_image instead of save_tags_to_firebase
+        try:
+            flag_image(item_with_flag, user_email, flag_type="rejected")
+        except Exception as e:
+            print(f"Error flagging image in Firebase: {str(e)}")
+            # Continue execution even if Firebase update fails
+        
+        return True
+    except Exception as e:
+        print(f"Error marking image as offensive: {str(e)}")
+        return False
+
+def flag_image(image_item, user_email, flag_type="flagged"):
+    """Flag or reject an image"""
+    try:
+        # Prepare data for saving
+        image_id = image_item.get("id", image_item.get("image_id", str(hash(image_item.get("image", "")))))
+        
+        tag_data = {
+            "image_id": image_id,
+            "text": image_item.get("text", ""),
+            "image_url": image_item.get("image", ""),
+            "tags": {},
+            "tagger": user_email,
+            "timestamp": pd.Timestamp.now().isoformat(),
+            "flagged": flag_type == "flagged",
+            "rejected": flag_type == "rejected"
+        }
+        
+        # Define the export directory and json path
+        export_dir = "learning_app/output/pairs"
+        json_path = os.path.join(export_dir, "tagged_results_export.json")
+        
+        # Load existing data
+        try:
+            with open(json_path, "r") as f:
+                existing_data = json.load(f)
+                # Ensure the data is a list
+                if not isinstance(existing_data, list):
+                    existing_data = []
+        except (FileNotFoundError, json.JSONDecodeError):
+            existing_data = []
+        
+        # Check if this image already exists in the data
+        updated = False
+        for i, item in enumerate(existing_data):
+            if isinstance(item, dict) and item.get("image_id") == image_id:
+                existing_data[i] = tag_data
+                updated = True
+                break
+                
+        if not updated:
+            existing_data.append(tag_data)
+            
+        # Save updated data
+        with open(json_path, "w") as f:
+            json.dump(existing_data, f, indent=2)
+            
+        # Update failures export
+        export_failures()
+        
+        return True
+    except Exception as e:
+        print(f"Error flagging image: {str(e)}")
+        return False
+
+# --- UI component rendering ---
 def render_download_ui(session_id=None):
     """Render download buttons with unique keys based on session_id"""
     st.sidebar.markdown("## 📥 Download Your Exports")
@@ -156,10 +366,11 @@ def render_download_ui(session_id=None):
         )
 
 def render_tagging_ui(image_data, user_info, current_index=0):
-    """
-    Render the main image tagging interface
-    """
-    # Add the logo at the top of the tagging UI
+    """Render the main image tagging interface"""
+    # Run initialization tasks
+    init_exports()
+    
+    # Display app header and logo
     st.markdown("""
     <div style="
         display: flex;
@@ -167,7 +378,7 @@ def render_tagging_ui(image_data, user_info, current_index=0):
         align-items: center;
         padding: 20px;
     ">
-        <img src="logo.png" width="150" onerror="this.onerror=null; this.src='https://placehold.co/150x150/111/teal?text=Logo'; this.style.padding='10px';" style="
+        <img src="logo.png" width="150" onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/Beerspitnight/ill-co-p3-cloud/048332999fbee394df358cace117351217ddd14c/assets/logo.png';this.style.padding='10px';" style="
             border-radius: 12px;
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
             background-color: #111;
@@ -176,45 +387,41 @@ def render_tagging_ui(image_data, user_info, current_index=0):
     </div>
     """, unsafe_allow_html=True)
     
-    # Add custom CSS for larger buttons
+    # Apply custom styling for UI elements
     st.markdown("""
     <style>
-        /* Make buttons larger and more prominent with !important flags */
+        /* Make buttons larger and more prominent */
         .stButton > button {
-            font-size: 48px !important;
-            padding: 1.25rem 2.5rem !important;
-            height: auto !important;
-            min-height: 80px !important;
+            font-size: 48px;
+            padding: 1.25rem 2.5rem;
+            height: auto;
+            min-height: 80px;
         }
         
         /* Target the specific buttons directly */
         button[kind="secondary"] {
-            font-size: 48px !important;
-            font-weight: bold !important;
-            padding: 1.25rem 2.5rem !important;
+            font-size: 48px;
+            font-weight: bold;
+            padding: 1.25rem 2.5rem;
         }
         
         /* Save button styling */
-        button:contains("Save Tags") {
-            background-color: #4CAF50 !important;
-            color: white !important;
-            font-weight: bold !important;
-            min-height: 100px !important;
+        button[data-label="Save Tags"] {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            min-height: 100px;
         }
         
         /* Navigation buttons */
-        button:contains("Previous"), button:contains("Next") {
-            font-weight: bold !important;
-            min-height: 90px !important;
+        button[data-label="Previous"], button[data-label="Next"] {
+            font-weight: bold;
+            min-height: 90px;
         }
-        
-        /* REMOVED: The generic button styling that was causing conflicts */
     </style>
     """, unsafe_allow_html=True)
     
-    # Run initialization tasks
-    init_exports()
-    
+    # Basic validation
     if not isinstance(image_data, list):
         st.error("Expected a list of images but received a single item or wrong type")
         return
@@ -237,20 +444,19 @@ def render_tagging_ui(image_data, user_info, current_index=0):
     # Create columns for layout
     col1, col2 = st.columns([0.6, 0.4])
 
-    # IMPORTANT: First initialize all form variables with default values
-    # This ensures they exist before save_state tries to use them
-    primary_element = ELEMENT_OPTIONS[0]  # Default to first option
+    # Initialize form variables
+    primary_element = ELEMENT_OPTIONS[0]
     secondary_element = "None"
-    primary_principle = PRINCIPLE_OPTIONS[0]  # Default to first option
+    primary_principle = PRINCIPLE_OPTIONS[0]
     secondary_principle = "None"
-    quality = "Medium"  # Default to medium quality
+    quality = "Medium"
     issues = []
     irrelevant = False
     notes = ""
     
-    # Define save_state function after initializing variables
+    # Define save_state function
     def save_state():
-        # Now these variables exist, even if the UI hasn't rendered yet
+        # Collect tag data
         save_tags = {
             "primary_element": primary_element,
             "secondary_element": secondary_element,
@@ -266,24 +472,24 @@ def render_tagging_ui(image_data, user_info, current_index=0):
         try:
             from learning_app.utils.firebase_service import save_tag_to_firebase
             
-            # Get a better image ID
-            # First try the filename without extension if it exists in the item
+            # Generate image ID
             if "image_filename" in current_item:
                 image_id = current_item["image_filename"]
-            # Then try the last part of the image URL
             elif "image" in current_item and current_item["image"]:
                 url_parts = current_item["image"].split("/")
                 image_id = url_parts[-1].replace(".", "_")
-            # Otherwise generate an ID from hash
             else:
                 image_id = str(hash(current_item.get("text", "") + str(current_index)))
+            
+            # Ensure user_info contains an email key
+            user_email = user_info.get("email", "unknown_user@example.com")
             
             # Prepare data for Firebase
             firebase_data = {
                 "text": current_item.get("text", ""),
                 "image_url": current_item.get("image", ""),
                 "tags": save_tags,
-                "tagger": user_info["email"],
+                "tagger": user_email,
                 "timestamp": pd.Timestamp.now().isoformat()
             }
             
@@ -291,11 +497,18 @@ def render_tagging_ui(image_data, user_info, current_index=0):
             save_tag_to_firebase(image_id, firebase_data)
             st.toast("Tags saved", icon="✅")
         except Exception as e:
-            print(f"Firebase save failed: {e}")
+            logging.error(f"Firebase save failed: {e}")
+            st.error("Failed to save tags to Firebase. Please try again later or contact support.")
+            import traceback
+            error_message = f"Firebase save failed: {e}"
+            print(error_message)
+            traceback.print_exc()
+            st.error(f"An error occurred while saving to Firebase: {error_message}")
         
         # Save to local storage
         return save_current_tags(current_item, save_tags, user_info["email"], user_info)
     
+    # Render UI components
     with col1:
         # Display the image
         image_url = current_item.get("image", current_item.get("image_url", ""))
@@ -313,7 +526,6 @@ def render_tagging_ui(image_data, user_info, current_index=0):
         with prev_col:
             prev_disabled = current_index <= 0
             if st.button("⬅️ Previous", use_container_width=True, disabled=prev_disabled):
-                # Create state variables before moving
                 save_state()
                 st.session_state.image_index = current_index - 1
                 st.rerun()
@@ -321,19 +533,17 @@ def render_tagging_ui(image_data, user_info, current_index=0):
         with next_col:
             next_disabled = current_index >= len(image_data) - 1
             if st.button("➡️ Next", use_container_width=True, disabled=next_disabled):
-                # Create state variables before moving
                 save_state()
                 st.session_state.image_index = current_index + 1
                 st.rerun()
     
+    # Right column for tagging options
     with col2:
-        # Create two columns for the tagging interface
         left_col, right_col = st.columns([1, 1])
         
         # Right column - Art Elements and Principles
         with right_col:
             st.markdown("### Elements of Art & Design")
-            # Update the variable when the UI changes
             primary_element = st.selectbox(
                 "Primary Element", 
                 options=ELEMENT_OPTIONS,
@@ -375,6 +585,8 @@ def render_tagging_ui(image_data, user_info, current_index=0):
             
             st.markdown("### Issues")
             issues = []
+            
+            # Issue checkboxes
             blurry = st.checkbox("Blurry", key=f"issue_blurry_{current_index}", on_change=save_state)
             if blurry:
                 issues.append("blurry")
@@ -387,7 +599,7 @@ def render_tagging_ui(image_data, user_info, current_index=0):
             if text_overlay:
                 issues.append("text_overlay")
                 
-            # Add red checkbox for irrelevant images
+            # Irrelevant image checkbox
             st.markdown("")
             irrelevant = st.checkbox(
                 "🚫 Image Irrelevant/Missing", 
@@ -398,16 +610,13 @@ def render_tagging_ui(image_data, user_info, current_index=0):
             if irrelevant:
                 issues.append("irrelevant")
                 
-            # Add yellow button for offensive images
+            # Offensive content button
             st.markdown("")
             if st.button(
                 "⚠️ Mark as Offensive", 
                 key=f"offensive_{current_index}", 
-                help="Click to mark this image as offensive/inappropriate and remove it from circulation",
-                use_container_width=True
+                on_click=lambda: try_mark_as_offensive(current_item, user_info["email"])
             ):
-                # Handle offensive image
-                mark_as_offensive(current_item, user_info["email"])
                 st.warning("Image marked as offensive and will be removed from circulation")
                 # Move to next image if available
                 if current_index < len(image_data) - 1:
@@ -424,198 +633,34 @@ def render_tagging_ui(image_data, user_info, current_index=0):
             save_state()
             st.success("Tags saved successfully!")
 
-    # Set up autosave for the form
-    if "last_autosave_index" not in st.session_state:
+    # Set up autosave functionality
+    if "last_autosave_index" not in st.session_state or "last_autosave_time" not in st.session_state:
         st.session_state.last_autosave_index = current_index
         st.session_state.last_autosave_time = datetime.now()
+        st.session_state.last_autosave_hash = None
 
-    # Autosave every 30 seconds if changes detected
-    if (datetime.now() - st.session_state.last_autosave_time).seconds > 30:
+    # Prepare current state for comparison
+    current_state = {
+        "primary_element": primary_element,
+        "secondary_element": secondary_element,
+        "primary_principle": primary_principle,
+        "secondary_principle": secondary_principle,
+        "quality": quality,
+        "issues": issues,
+        "irrelevant": irrelevant,
+        "notes": notes,
+    }
+    current_state_hash = hash(json.dumps(current_state, sort_keys=True))
+
+    if "last_autosave_hash" not in st.session_state:
+        st.session_state.last_autosave_hash = current_state_hash
+
+    # Autosave if changes detected and more than 30 seconds passed
+    if (
+        (datetime.now() - st.session_state.last_autosave_time).seconds > 30
+        and current_state_hash != st.session_state.last_autosave_hash
+    ):
         save_state()
         st.session_state.last_autosave_time = datetime.now()
+        st.session_state.last_autosave_hash = current_state_hash
         st.toast("Changes autosaved", icon="✅")
-
-# Add this new function to handle offensive images
-def mark_as_offensive(item, user_email):
-    """
-    Mark an image as offensive and log it for removal
-    
-    Parameters:
-    - item: The image item to mark as offensive
-    - user_email: The email of the user who marked it
-    """
-    try:
-        # Create offensive images directory if it doesn't exist
-        output_dir = "learning_app/output/offensive_images"
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Create or append to offensive images log
-        log_path = os.path.join(output_dir, "offensive_images.csv")
-        
-        # Prepare data
-        timestamp = datetime.now().isoformat()
-        image_id = item.get("id", item.get("image", "unknown"))
-        item_data = {
-            "timestamp": timestamp,
-            "image_id": image_id,
-            "image_url": item.get("image", item.get("image_url", "")),
-            "text": item.get("text", item.get("caption", "No caption")),
-            "flagged_by": user_email
-        }
-        
-        # Create or append to CSV
-        try:
-            df = pd.read_csv(log_path)
-            df = pd.concat([df, pd.DataFrame([item_data])], ignore_index=True)
-        except (FileNotFoundError, pd.errors.EmptyDataError):
-            df = pd.DataFrame([item_data])
-            
-        # Save back to CSV
-        df.to_csv(log_path, index=False)
-        
-        # Also save to a JSON file for backup
-        json_path = os.path.join(output_dir, "offensive_images.json")
-        try:
-            with open(json_path, "r") as f:
-                data = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            data = []
-            
-        data.append(item_data)
-        
-        with open(json_path, "w") as f:
-            json.dump(data, f, indent=2)
-            
-        # Update the image item with offensive flag in firebase if available
-        item_with_flag = {**item, "offensive": True}
-        # Call appropriate save function - using flag_image instead of save_tags_to_firebase
-        flag_image(item_with_flag, user_email, flag_type="rejected")
-        
-        return True
-    except Exception as e:
-        print(f"Error marking image as offensive: {str(e)}")
-        return False
-
-def save_current_tags(image_item, tags, user_email, user_info=None):
-    """Save the current image tags to the database with complete user info"""
-    try:
-        # Prepare data for saving
-        image_id = image_item.get("id", image_item.get("image_id", str(hash(image_item.get("image", "")))))
-        
-        # Extract user information, defaulting to email if no user_info provided
-        uid = user_info.get("uid", f"email-{hash(user_email)}") if user_info else f"email-{hash(user_email)}"
-        display_name = user_info.get("display_name", user_email.split('@')[0]) if user_info else user_email.split('@')[0]
-        
-        tag_data = {
-            "image_id": image_id,
-            "text": image_item.get("text", ""),
-            "image_url": image_item.get("image", ""),
-            "tags": tags,
-            "tagger": user_email,
-            "uid": uid,
-            "display_name": display_name,
-            "timestamp": pd.Timestamp.now().isoformat()
-        }
-        
-        # Save to exports directory
-        export_dir = "learning_app/output/pairs"
-        os.makedirs(export_dir, exist_ok=True)
-        
-        # Update JSON file
-        json_path = os.path.join(export_dir, "tagged_results_export.json")
-        
-        # Load existing data - ensure it's a list
-        try:
-            with open(json_path, "r") as f:
-                content = f.read().strip()
-                # Handle empty file case
-                if not content:
-                    existing_data = []
-                else:
-                    existing_data = json.loads(content)
-                    # Ensure we have a list even if a dictionary was loaded
-                    if isinstance(existing_data, dict):
-                        existing_data = [existing_data]
-                    elif not isinstance(existing_data, list):
-                        existing_data = []
-        except (FileNotFoundError, json.JSONDecodeError):
-            existing_data = []
-        
-        # Check if this image already exists in the data
-        updated = False
-        for i, item in enumerate(existing_data):
-            if isinstance(item, dict) and item.get("image_id") == image_id:
-                existing_data[i] = tag_data
-                updated = True
-                break
-                
-        if not updated:
-            existing_data.append(tag_data)
-            
-        # Save updated data
-        with open(json_path, "w") as f:
-            json.dump(existing_data, f, indent=2)
-            
-        # Update CSV file
-        csv_path = os.path.join(export_dir, "tagged_results_export.csv")
-        df = pd.DataFrame(existing_data)
-        df.to_csv(csv_path, index=False)
-        
-        return True
-    except Exception as e:
-        print(f"Error saving tags: {str(e)}")
-        return False
-
-def flag_image(image_item, user_email, flag_type="flagged"):
-    """Flag or reject an image"""
-    try:
-        # Prepare data for saving
-        image_id = image_item.get("id", image_item.get("image_id", str(hash(image_item.get("image", "")))))
-        
-        tag_data = {
-            "image_id": image_id,
-            "text": image_item.get("text", ""),
-            "image_url": image_item.get("image", ""),
-            "tags": {},
-            "tagger": user_email,
-            "timestamp": pd.Timestamp.now().isoformat(),
-            "flagged": flag_type == "flagged",
-            "rejected": flag_type == "rejected"
-        }
-        
-        # Save to exports directory
-        export_dir = "learning_app/output/pairs"
-        os.makedirs(export_dir, exist_ok=True)
-        
-        # Update JSON file
-        json_path = os.path.join(export_dir, "tagged_results_export.json")
-        
-        # Load existing data
-        try:
-            with open(json_path, "r") as f:
-                existing_data = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            existing_data = []
-        
-        # Check if this image already exists in the data
-        updated = False
-        for i, item in enumerate(existing_data):
-            if isinstance(item, dict) and item.get("image_id") == image_id:
-                existing_data[i] = tag_data
-                updated = True
-                break
-                
-        if not updated:
-            existing_data.append(tag_data)
-            
-        # Save updated data
-        with open(json_path, "w") as f:
-            json.dump(existing_data, f, indent=2)
-            
-        # Update failures export
-        export_failures()
-        
-        return True
-    except Exception as e:
-        print(f"Error flagging image: {str(e)}")
-        return False

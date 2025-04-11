@@ -1,36 +1,26 @@
 import streamlit as st
 
-# Configure the page first, before any other Streamlit commands
 st.set_page_config(page_title="Ill-Co Tagging", layout="wide", initial_sidebar_state="expanded")
 
+# Configure the page first, before any other Streamlit commands
 # dataset_interface.py 
 # IMPORTANT: set_page_config must be the FIRST Streamlit command
 
 # Now proceed with other imports
-from datetime import datetime
 import os
 import json
 import random
-import pandas as pd
-import openai
-import base64
 import time
+import openai
 from learning_app.utils.config import load_environment, get_openai_api_key
 
 # Import constants from the constants file
 try:
     from learning_app.utils.constants import ELEMENT_OPTIONS, PRINCIPLE_OPTIONS
 except (ModuleNotFoundError, ImportError, SyntaxError) as e:
-    # If that fails, try to define constants directly
-    print(f"⚠️ Could not import constants module due to: {e}. Using local definitions instead.")
-    # Define the constants directly in this file
-    ELEMENT_OPTIONS = [
-        "Line", "Shape", "Form", "Color", "Value", "Space", "Texture"
-    ]
-    PRINCIPLE_OPTIONS = [
-        "Balance", "Emphasis", "Movement", "Pattern & Repetition", 
-        "Rhythm", "Proportion", "Variety", "Unity"
-    ]
+    # Log the error and halt execution
+    st.error(f"❌ Critical error: Could not import constants module due to: {e}. Please ensure the module is available and error-free.")
+    st.stop()
 
 # Define a constant at the top of your file
 IS_DEV = False  # Set to False for production
@@ -46,9 +36,16 @@ print(f"FIREBASE_DATABASE_URL: {os.getenv('FIREBASE_DATABASE_URL')}")
 # NOW import Firebase-related modules after environment is loaded
 from learning_app.utils.firebase_service import save_tag_to_firebase as save_tags_to_firebase, get_user_tags
 from learning_app.utils.firebase_service import get_all_tag_counts, get_user_tag_count
-from learning_app.scripts.auth import login_user, create_user
-from learning_app.scripts.image_tagging_ui import render_tagging_ui, render_download_ui
-
+# Print environment variables for debugging in development mode only
+# NOW import Firebase-related modules after environment is loaded
+from learning_app.utils.firebase_service import (
+    save_tag_to_firebase as save_tags_to_firebase, 
+    get_user_tags,
+    get_all_tag_counts, 
+    get_user_tag_count,
+    create_user,
+    login_user
+)
 # Add after your imports but before sidebar code
 def create_account(email, password, display_name):
     """Centralized account creation function with validation"""
@@ -171,7 +168,7 @@ def load_image_pairs():
 
 def validate_image_data(data_list):
     """Clean and validate image data before using it"""
-    print("⚠️ Using sample data - combined_pairs.json not found")
+    # Removed misleading print statement
     valid_data = []
     for item in data_list:
         # Ensure required fields exist
@@ -219,8 +216,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # === Firebase Setup ===
-# Import your Firebase service module, which may already initialize Firebase
-import learning_app.utils.firebase_service
+# Firebase services are already imported above
+print("✅ Firebase services imported")
 # No need to explicitly initialize if the module does it on import
 print("✅ Firebase services imported")
 
@@ -230,14 +227,15 @@ try:
     api_key = get_openai_api_key()
     if api_key:
         client = openai.OpenAI(api_key=api_key)
-        if api_key:
-            print("✅ Using environment variable for OpenAI API key")
-        else:
-            raise ValueError("❌ OpenAI API key is missing or invalid. Please check your environment configuration.")
+        print("✅ Using environment variable for OpenAI API key")
     else:
-        # Fall back to Streamlit secrets if needed
-        client = openai.OpenAI(api_key=st.secrets["OPENAI"]["OPENAI_API_KEY"])
-        print("✅ Using Streamlit secrets for OpenAI API key")
+        try:
+            # Fall back to Streamlit secrets if needed
+            api_key = st.secrets["OPENAI"]["OPENAI_API_KEY"]
+            client = openai.OpenAI(api_key=api_key)
+            print("✅ Using Streamlit secrets for OpenAI API key")
+        except KeyError:
+            raise ValueError("❌ OpenAI API key is missing or invalid. Please check your environment configuration and Streamlit secrets.")
 except Exception as e:
     st.error(f"❌ OpenAI API key not found: {e}")
     st.stop()
@@ -260,9 +258,8 @@ st.markdown("""
     align-items: center;
     padding: 20px;
 ">
-    <img src="assets/logo.png" width="150" 
-    onerror="this.onerror=null; this.src='https://placehold.co/150x150/111/teal?text=Logo'; this.style.padding='10px';" 
-    style="
+    <img src="logo1.png" width="150" 
+    onerror="this.onerror=null; this.src='assets/logo1.png'; this.style.padding='10px';" style="
         border-radius: 12px;
         box-shadow: 0 0 20px rgba(0, 255, 255, 0.4);
         background-color: #111;
@@ -298,12 +295,7 @@ with st.sidebar:
             user_info = create_account(email, password, display_name)
             if user_info:  # If account creation was successful
                 st.rerun()  # Refresh the page
-            else:
-                # Provide fallback option
-                st.info("Would you like to use dev mode instead?")
-                if st.button("Use Dev Mode"):
-                    enable_dev_mode(email, display_name)
-                    st.rerun()
+
     else:
         # For logged-in users, show user info and logout option
         st.title(f"👋 Welcome, {st.session_state.user.get('display_name', 'User')}")
@@ -350,8 +342,7 @@ def render_art_elements_sidebar():
                 "principles/variety": "https://via.placeholder.com/300x200?text=Variety",
                 "principles/unity": "https://via.placeholder.com/300x200?text=Unity"
             }
-            # Create the directory if it doesn't exist
-            os.makedirs(os.path.dirname(qr_urls_path), exist_okay=True)
+            os.makedirs(os.path.dirname(qr_urls_path), exist_ok=True)
             # Save the sample structure for future use
             with open(qr_urls_path, "w") as f:
                 json.dump(qr_urls, f, indent=2)
@@ -444,14 +435,19 @@ if st.session_state.page == "login":
             col_a, col_b = st.columns(2)
             with col_a:
                 if st.button("Login", use_container_width=True):
-                    user = login_user(login_email, login_password)
-                    if user:
-                        st.session_state.user = user
-                        st.session_state.page = "tagging"
-                        # Initialize image index in session state
-                        if "image_index" not in st.session_state:
-                            st.session_state.image_index = 0
-                        st.rerun()
+                    try:
+                        user = login_user(login_email, login_password)
+                        if user:
+                            st.session_state.user = user
+                            st.session_state.page = "tagging"
+                            # Initialize image index in session state
+                            if "image_index" not in st.session_state:
+                                st.session_state.image_index = 0
+                            st.rerun()
+                        else:
+                            st.error("Invalid login credentials. Please try again.")
+                    except Exception as e:
+                        st.error(f"An error occurred during login: {str(e)}")
                     
             st.markdown('</div>', unsafe_allow_html=True)
     
@@ -468,31 +464,8 @@ if st.session_state.page == "login":
                 user_info = create_account(new_email, new_password, display_name)
                 if user_info:  # If account creation was successful
                     st.rerun()  # Refresh the page
-                else:
-                    # Provide fallback option
-                    st.info("Would you like to use dev mode instead?")
-                    if st.button("Use Dev Mode"):
-                        enable_dev_mode(new_email, display_name)
-                        st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-    if IS_DEV:
-        st.markdown("""
-            <div style="position: fixed; bottom: 10px; right: 15px; font-size: 32px; cursor: pointer;" 
-            onclick="window.devLogin()">
-                🌲
-            </div>
-            <script>
-            function devLogin() {
-                // This will submit the next form button after the tree is clicked
-                const buttons = document.querySelectorAll('button[kind="primaryFormSubmit"]');
-                if (buttons.length > 1) {
-                    buttons[1].click();
-                }
-            }
-            window.devLogin = devLogin;
-            </script>
-        """, unsafe_allow_html=True)
     
 # === Tagging UI ===
 elif st.session_state.page == "tagging":
@@ -568,25 +541,30 @@ elif st.session_state.page == "tagging":
             🔍 Need help? Refer to the **Quick Reference** in the sidebar for visual examples.
             """)
             
-    # Load image data for tagging
+    # Cache the shuffled data to avoid unnecessary computation
+    def get_shuffled_data(data):
+        random.seed(int(time.time()))
+    # Load image data first
     image_data = validate_image_data(load_image_pairs())
     
-    # Shuffle the data outside the cached function
-    random.seed(int(time.time()))
+    # Define the shuffle function
+    @st.cache_data(ttl=3600)
+    def get_shuffled_data(data):
+        import time
+        import random
+        random.seed(int(time.time()))
+        random.shuffle(data)
+        return data
+    
+        st.error("❌ No image data available. Please check your dataset or file paths. "
+                 "Ensure the file exists at the specified location and is properly formatted. "
+                 "Refer to the [documentation](https://example.com/docs) for more details.")
+    image_data = get_shuffled_data(image_data)
     random.shuffle(image_data)
     
     idx = st.session_state.image_index
 
-    # Remove debug block - not needed in production
-    # st.write("DEBUG INFO:")
-    # st.write("User:", st.session_state.get("user"))
-    # st.write("Index:", idx)
-    # st.write("Image data length:", len(image_data) if image_data else "None")
-    # st.write("Current image:", image_data[idx] if image_data and 0 <= idx < len(image_data) else "None or out of range")
-
-    if not image_data:
-        st.error("❌ No image data available. Please check your dataset or file paths.")
-    elif 0 <= idx < len(image_data):
+    if 0 <= idx < len(image_data):
         # Pass the ENTIRE image_data list, not just one item
         render_tagging_ui(image_data, st.session_state.user, idx)
     else:
@@ -594,5 +572,8 @@ elif st.session_state.page == "tagging":
     # === Sidebar Info with Art Elements Reference ===
     render_art_elements_sidebar()
     
+    # Also add the download UI to the sidebar
+    from learning_app.utils.ui_components import render_download_ui, render_tagging_ui
+    render_download_ui()
     # Also add the download UI to the sidebar
     render_download_ui()
